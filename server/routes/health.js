@@ -2,7 +2,6 @@ import express from 'express';
 import { optionalAuth } from '../middleware/auth.js';
 import pool, { healthCheck } from '../database/pool.js';
 import redisManager from '../modules/redis-manager.js';
-import messageQueue from '../modules/message-queue.js';
 import logger from '../config/logger.js';
 
 const router = express.Router();
@@ -12,12 +11,10 @@ router.get('/', optionalAuth, async (req, res) => {
   try {
     const dbHealth = await healthCheck();
     const redisHealth = await redisManager.health();
-    const mqHealth = await messageQueue.health();
 
     const allHealthy = 
       dbHealth.status === 'connected' &&
-      redisHealth.status === 'connected' &&
-      mqHealth.status === 'connected';
+      redisHealth.status === 'connected';
 
     const status = allHealthy ? 'healthy' : 'degraded';
     const statusCode = allHealthy ? 200 : 503;
@@ -29,7 +26,6 @@ router.get('/', optionalAuth, async (req, res) => {
       services: {
         database: dbHealth.status,
         redis: redisHealth.status,
-        rabbitmq: mqHealth.status,
       },
       version: '1.0.0',
       environment: process.env.NODE_ENV || 'development',

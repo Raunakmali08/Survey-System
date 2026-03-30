@@ -3,9 +3,67 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { query } from '../database/pool.js';
 import logger from '../config/logger.js';
 import redisManager from '../modules/redis-manager.js';
-import messageQueue from '../modules/message-queue.js';
+import { recordResponseHistory } from '../services/history-service.js';
 
 const router = express.Router();
+
+router.post('/public/:surveyId', asyncHandler(async (req, res) => {
+  const { surveyId } = req.params;
+  const { answers, respondentName, respondentEmail } = req.body;
+
+  const surveyResult = await query(
+    `SELECT id, title, status
+     FROM surveys
+     WHERE id = $1 AND status = 'published'`,
+    [surveyId]
+  );
+
+  if (surveyResult.rows.length === 0) {
+    throw new AppError('Published survey not found', 404, 'NOT_FOUND');
+  }
+
+  const metadata = {
+    respondentName: respondentName || null,
+    respondentEmail: respondentEmail || null,
+    submittedFrom: 'public-form',
+  };
+
+  const createResult = await query(
+    `INSERT INTO responses (survey_id, answers, metadata, status, completed_at)
+     VALUES ($1, $2, $3, 'completed', CURRENT_TIMESTAMP)
+     RETURNING id, survey_id, answers, metadata, status, created_at, completed_at, version`,
+    [surveyId, JSON.stringify(answers || {}), JSON.stringify(metadata)]
+  );
+
+  const response = createResult.rows[0];
+
+  await redisManager.setJson(`response:${response.id}`, response, 3600);
+
+  await recordResponseHistory({
+    responseId: response.id,
+    surveyId,
+    action: 'PUBLIC_SUBMIT',
+    snapshot: response,
+    req,
+    actorMetadata: {
+      email: respondentEmail || null,
+      name: respondentName || null,
+      userType: 'public',
+    },
+    changeMetadata: {
+      source: 'public-form',
+      respondentEmail: respondentEmail || null,
+      respondentName: respondentName || null,
+    },
+  });
+
+  logger.info('Public response submitted', {
+    responseId: response.id,
+    surveyId,
+  });
+
+  res.status(201).json(response);
+}));
 
 /**
  * @route   POST /api/surveys/:surveyId/responses
@@ -28,10 +86,10 @@ router.post('/:surveyId/responses', asyncHandler(async (req, res) => {
 
   // Create new response
   const createResult = await query(
-    `INSERT INTO responses (survey_id, answers, status)
-     VALUES ($1, $2, 'in_progress')
-     RETURNING id, survey_id, answers, status, created_at, version`,
-    [surveyId, JSON.stringify(answers || [])]
+    `INSERT INTO responses (survey_id, user_id, answers, status)
+     VALUES ($1, $2, $3, 'in_progress')
+     RETURNING id, survey_id, user_id, answers, metadata, status, created_at, version`,
+    [surveyId, req.user.id, JSON.stringify(answers || [])]
   );
 
   const response = createResult.rows[0];
@@ -39,11 +97,13 @@ router.post('/:surveyId/responses', asyncHandler(async (req, res) => {
   // Cache response
   await redisManager.setJson(`response:${response.id}`, response, 3600);
 
-  // Publish event
-  await messageQueue.publish('survey.events', 'response.created', {
+  await recordResponseHistory({
     responseId: response.id,
     surveyId,
-    timestamp: new Date().toISOString(),
+    action: 'CREATE',
+    snapshot: response,
+    req,
+    changeMetadata: { source: 'api' },
   });
 
   logger.info('Response created', { responseId: response.id, surveyId });
@@ -60,12 +120,21 @@ router.patch('/:surveyId/responses/:responseId', asyncHandler(async (req, res) =
   const { surveyId, responseId } = req.params;
   const { answers } = req.body;
 
+  const currentResult = await query(
+    `SELECT * FROM responses WHERE id = $1 AND survey_id = $2`,
+    [responseId, surveyId]
+  );
+
+  if (currentResult.rows.length === 0) {
+    throw new AppError('Response not found', 404, 'NOT_FOUND');
+  }
+
   // Update response with version check
   const updateResult = await query(
     `UPDATE responses
      SET answers = $1, status = 'in_progress', version = version + 1
      WHERE id = $2 AND survey_id = $3
-     RETURNING id, survey_id, answers, status, updated_at, version`,
+     RETURNING id, survey_id, user_id, answers, metadata, status, updated_at, version`,
     [JSON.stringify(answers || []), responseId, surveyId]
   );
 
@@ -78,11 +147,18 @@ router.patch('/:surveyId/responses/:responseId', asyncHandler(async (req, res) =
   // Cache updated response
   await redisManager.setJson(`response:${response.id}`, response, 3600);
 
-  // Publish event
-  await messageQueue.publish('survey.events', 'response.updated', {
-    responseId: response.id,
+  await recordResponseHistory({
+    responseId,
     surveyId,
-    timestamp: new Date().toISOString(),
+    action: 'UPDATE',
+    snapshot: response,
+    previousSnapshot: currentResult.rows[0],
+    req,
+    changeMetadata: {
+      source: 'api',
+      versionBefore: currentResult.rows[0].version,
+      versionAfter: response.version,
+    },
   });
 
   logger.info('Response updated', { responseId: response.id, surveyId });
@@ -102,7 +178,7 @@ router.get('/:surveyId/responses', asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
 
   const result = await query(
-    `SELECT id, survey_id, answers, status, created_at, version
+    `SELECT id, survey_id, answers, metadata, status, created_at, version
      FROM responses
      WHERE survey_id = $1
      ORDER BY created_at DESC
@@ -133,26 +209,38 @@ router.get('/:surveyId/responses', asyncHandler(async (req, res) => {
 router.post('/:surveyId/responses/:responseId/complete', asyncHandler(async (req, res) => {
   const { surveyId, responseId } = req.params;
 
+  const currentResult = await query(
+    `SELECT * FROM responses WHERE id = $1 AND survey_id = $2`,
+    [responseId, surveyId]
+  );
+
+  if (currentResult.rows.length === 0) {
+    throw new AppError('Response not found', 404, 'NOT_FOUND');
+  }
+
   const result = await query(
     `UPDATE responses
      SET status = 'completed', completed_at = CURRENT_TIMESTAMP, version = version + 1
      WHERE id = $1 AND survey_id = $2
-     RETURNING id, status, completed_at, version`,
+     RETURNING id, survey_id, user_id, answers, metadata, status, completed_at, version`,
     [responseId, surveyId]
   );
-
-  if (result.rows.length === 0) {
-    throw new AppError('Response not found', 404, 'NOT_FOUND');
-  }
 
   // Invalidate cache
   await redisManager.del(`response:${responseId}`);
 
-  // Publish event
-  await messageQueue.publish('survey.events', 'response.completed', {
+  await recordResponseHistory({
     responseId,
     surveyId,
-    timestamp: new Date().toISOString(),
+    action: 'COMPLETE',
+    snapshot: result.rows[0],
+    previousSnapshot: currentResult.rows[0],
+    req,
+    changeMetadata: {
+      source: 'api',
+      versionBefore: currentResult.rows[0].version,
+      versionAfter: result.rows[0].version,
+    },
   });
 
   logger.info('Response completed', { responseId, surveyId });

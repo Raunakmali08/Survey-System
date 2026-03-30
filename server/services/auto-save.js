@@ -1,30 +1,10 @@
 import logger from '../config/logger.js';
 import redisManager from '../modules/redis-manager.js';
-import messageQueue from '../modules/message-queue.js';
 
 class AutoSaveService {
   constructor() {
     this.pendingSaves = new Map();
     this.saveDebounceMs = 1000;
-  }
-
-  async initializeEventQueue() {
-    try {
-      // Set up RabbitMQ for response save events
-      await messageQueue.assertExchange('survey.events', 'topic', { durable: true });
-      await messageQueue.assertQueue('response.save', { durable: true });
-      await messageQueue.bindQueue('response.save', 'survey.events', 'response.*');
-      
-      // Start consuming
-      await messageQueue.consume('response.save', async (message) => {
-        logger.debug('Processing auto-save event:', message);
-      });
-
-      logger.info('Auto-save service initialized');
-    } catch (error) {
-      logger.error('Failed to initialize auto-save service:', error);
-      throw error;
-    }
   }
 
   // Debounced save with optimistic locking
@@ -59,15 +39,7 @@ class AutoSaveService {
       timestamp: Date.now(),
     }, 300); // 5 minute TTL
 
-    // Publish to message queue
-    await messageQueue.publish('survey.events', 'response.save', {
-      responseId,
-      updates,
-      version,
-      timestamp: new Date().toISOString(),
-    });
-
-    logger.debug('Auto-save published for response:', { responseId });
+    logger.debug('Auto-save cached for response:', { responseId });
   }
 
   // Conflict detection and resolution

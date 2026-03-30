@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "migrate": "node database/migrate.js",
-    "seed": "node database/seed.js"
+    "seed": "node database/seed.js",
+    "backup:db": "bash ../scripts/backup-postgres.sh"
   },
   "keywords": [
     "survey",
@@ -29,11 +30,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "express-ws": "^5.0.2",
     "jsonwebtoken": "^9.0.0",
     "pg": "^8.11.3",
     "redis": "^4.6.12",
-    "amqplib": "^0.10.3",
     "winston": "^3.11.0",
     "uuid": "^9.0.1"
   },

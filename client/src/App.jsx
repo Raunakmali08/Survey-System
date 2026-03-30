@@ -1,24 +1,34 @@
 import { useState, useEffect } from 'react';
 import AuthPanel from './components/AuthPanel.jsx';
+import PublicSurveyPage from './components/PublicSurveyPage.jsx';
 import SurveyList from './components/SurveyList.jsx';
 import SurveyForm from './components/SurveyForm.jsx';
 import { clearSession, getStoredUser } from './services/api.js';
+
+function getPublicSurveyIdFromPath() {
+  const match = window.location.pathname.match(/^\/form\/([^/]+)$/);
+  return match ? match[1] : null;
+}
 
 function App() {
   const [currentPage, setCurrentPage] = useState('list');
   const [selectedSurvey, setSelectedSurvey] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [user, setUser] = useState(() => getStoredUser());
+  const [publicSurveyId, setPublicSurveyId] = useState(() => getPublicSurveyIdFromPath());
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
+    const handlePopState = () => setPublicSurveyId(getPublicSurveyIdFromPath());
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('popstate', handlePopState);
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('popstate', handlePopState);
     };
   }, []);
 
@@ -66,16 +76,21 @@ function App() {
       </header>
 
       <main className="app-main">
-        {!user && (
+        {publicSurveyId && (
+          <PublicSurveyPage
+            surveyId={publicSurveyId}
+          />
+        )}
+        {!user && !publicSurveyId && (
           <AuthPanel onAuthSuccess={setUser} />
         )}
-        {user && currentPage === 'list' && (
+        {user && !publicSurveyId && currentPage === 'list' && (
           <SurveyList 
             onSelectSurvey={handleSurveySelect}
             onCreateNew={handleCreateNew}
           />
         )}
-        {user && currentPage === 'form' && (
+        {user && !publicSurveyId && currentPage === 'form' && (
           <SurveyForm
             survey={selectedSurvey}
             onBack={handleBack}

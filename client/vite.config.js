@@ -18,11 +18,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: path => path.replace(/^\/api/, '/api'),
       },
-      '/ws': {
-        target: backendTarget,
-        ws: true,
-        rewrite: path => path.replace(/^\/ws/, '/ws'),
-      },
     },
   },
   build: {

@@ -355,66 +355,9 @@ Health check endpoint.
   "uptime": 86400,
   "services": {
     "database": "connected",
-    "redis": "connected",
-    "rabbitmq": "connected"
+    "redis": "connected"
   },
   "version": "1.0.0"
-}
-```
-
----
-
-## WebSocket Events
-
-### Connection
-```javascript
-const ws = new WebSocket('ws://localhost:3000/ws');
-ws.addEventListener('open', () => {
-  ws.send(JSON.stringify({
-    type: 'CONNECT',
-    token: 'jwt-token'
-  }));
-});
-```
-
-### Survey Updated
-When a survey is updated, connected clients receive:
-```json
-{
-  "type": "SURVEY_UPDATED",
-  "surveyId": "uuid",
-  "changes": {
-    "title": "New Title"
-  },
-  "updatedBy": "user-id",
-  "timestamp": "2024-01-15T10:00:00Z"
-}
-```
-
-### Response Updated
-When a response is updated:
-```json
-{
-  "type": "RESPONSE_UPDATED",
-  "surveyId": "uuid",
-  "responseId": "uuid",
-  "changes": {
-    "answers": [...]
-  },
-  "timestamp": "2024-01-15T10:00:00Z"
-}
-```
-
-### Conflict Notification
-When conflicts are detected:
-```json
-{
-  "type": "CONFLICT_DETECTED",
-  "resourceType": "response",
-  "resourceId": "uuid",
-  "serverVersion": 2,
-  "clientVersion": 1,
-  "conflicts": [...]
 }
 ```
 

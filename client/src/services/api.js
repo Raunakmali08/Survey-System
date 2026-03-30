@@ -121,6 +121,11 @@ export async function getSurvey(id) {
   }
 }
 
+export async function getPublicSurvey(id) {
+  const response = await axios.get(`/api/public/surveys/public/${id}`);
+  return response.data;
+}
+
 export async function createSurvey(data) {
   try {
     const response = await apiClient.post('/surveys', data);
@@ -204,6 +209,11 @@ export async function submitResponse(surveyId, data) {
     
     throw error;
   }
+}
+
+export async function submitPublicResponse(surveyId, data) {
+  const response = await axios.post(`/api/public/responses/public/${surveyId}`, data);
+  return response.data;
 }
 
 export async function updateResponse(surveyId, responseId, data) {

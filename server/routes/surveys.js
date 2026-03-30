@@ -3,8 +3,24 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { query } from '../database/pool.js';
 import logger from '../config/logger.js';
 import redisManager from '../modules/redis-manager.js';
+import { recordSurveyHistory } from '../services/history-service.js';
 
 const router = express.Router();
+
+router.get('/public/:id', asyncHandler(async (req, res) => {
+  const result = await query(
+    `SELECT id, title, description, questions, status, published_at
+     FROM surveys
+     WHERE id = $1 AND status = 'published'`,
+    [req.params.id]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AppError('Published survey not found', 404, 'NOT_FOUND');
+  }
+
+  res.json(result.rows[0]);
+}));
 
 // Get all surveys for user
 router.get('/', asyncHandler(async (req, res) => {
@@ -67,6 +83,14 @@ router.post('/', asyncHandler(async (req, res) => {
     [req.user.id, title, description || null, JSON.stringify(questions || [])]
   );
 
+  await recordSurveyHistory({
+    surveyId: result.rows[0].id,
+    action: 'CREATE',
+    snapshot: result.rows[0],
+    req,
+    changeMetadata: { source: 'api', createdBy: req.user.id },
+  });
+
   logger.info('Survey created', { surveyId: result.rows[0].id, userId: req.user.id });
 
   res.status(201).json(result.rows[0]);
@@ -104,7 +128,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
 
   // Check version for conflict
   const currentResult = await query(
-    `SELECT version FROM surveys WHERE id = $1 AND user_id = $2`,
+    `SELECT * FROM surveys WHERE id = $1 AND user_id = $2`,
     [req.params.id, req.user.id]
   );
 
@@ -124,6 +148,8 @@ router.patch('/:id', asyncHandler(async (req, res) => {
       currentVersion: currentResult.rows[0].version,
     });
   }
+
+  const currentSurvey = currentResult.rows[0];
 
   const updates = [];
   const params = [req.params.id, req.user.id];
@@ -154,31 +180,71 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     `UPDATE surveys
      SET ${updates.join(', ')}
      WHERE id = $1 AND user_id = $2
-     RETURNING id, title, description, status, updated_at, version`,
+     RETURNING *`,
     params
   );
 
   // Invalidate cache
   await redisManager.del(`survey:${req.params.id}`);
 
+  const updatedSurvey = result.rows[0];
+
+  await recordSurveyHistory({
+    surveyId: req.params.id,
+    action: status === 'published' ? 'PUBLISH' : status === 'closed' ? 'CLOSE' : 'UPDATE',
+    snapshot: updatedSurvey,
+    previousSnapshot: currentSurvey,
+    req,
+    changeMetadata: {
+      source: 'api',
+      fields: Object.keys(req.body),
+      versionBefore: currentSurvey.version,
+      versionAfter: updatedSurvey.version,
+    },
+  });
+
   logger.info('Survey updated', { surveyId: req.params.id, userId: req.user.id });
 
-  res.json(result.rows[0]);
+  res.json({
+    id: updatedSurvey.id,
+    title: updatedSurvey.title,
+    description: updatedSurvey.description,
+    status: updatedSurvey.status,
+    updated_at: updatedSurvey.updated_at,
+    version: updatedSurvey.version,
+  });
 }));
 
 // Delete survey
 router.delete('/:id', asyncHandler(async (req, res) => {
-  const result = await query(
+  const currentResult = await query(
+    `SELECT * FROM surveys WHERE id = $1 AND user_id = $2`,
+    [req.params.id, req.user.id]
+  );
+
+  if (currentResult.rows.length === 0) {
+    throw new AppError('Survey not found', 404, 'NOT_FOUND');
+  }
+
+  await query(
     `DELETE FROM surveys WHERE id = $1 AND user_id = $2 RETURNING id`,
     [req.params.id, req.user.id]
   );
 
-  if (result.rows.length === 0) {
-    throw new AppError('Survey not found', 404, 'NOT_FOUND');
-  }
-
   // Invalidate cache
   await redisManager.del(`survey:${req.params.id}`);
+
+  await recordSurveyHistory({
+    surveyId: req.params.id,
+    action: 'DELETE',
+    snapshot: {
+      id: req.params.id,
+      deleted: true,
+    },
+    previousSnapshot: currentResult.rows[0],
+    req,
+    changeMetadata: { source: 'api' },
+  });
 
   logger.info('Survey deleted', { surveyId: req.params.id, userId: req.user.id });
 

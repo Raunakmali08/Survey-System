@@ -46,6 +46,33 @@ CREATE TABLE IF NOT EXISTS responses (
   status VARCHAR(50) DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'completed', 'abandoned'))
 );
 
+-- Survey history table for audit and rollback support
+CREATE TABLE IF NOT EXISTS survey_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  survey_id UUID NOT NULL,
+  action VARCHAR(50) NOT NULL CHECK (action IN ('CREATE', 'UPDATE', 'DELETE', 'PUBLISH', 'CLOSE')),
+  snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  previous_snapshot JSONB,
+  actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  actor_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  change_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Response history table for audit and rollback support
+CREATE TABLE IF NOT EXISTS response_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  response_id UUID NOT NULL,
+  survey_id UUID NOT NULL,
+  action VARCHAR(50) NOT NULL CHECK (action IN ('CREATE', 'UPDATE', 'COMPLETE', 'DELETE', 'PUBLIC_SUBMIT')),
+  snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  previous_snapshot JSONB,
+  actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  actor_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  change_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Survey Answers table (normalized for analytics)
 CREATE TABLE IF NOT EXISTS answers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -92,6 +119,11 @@ CREATE INDEX IF NOT EXISTS idx_answers_question_id ON answers(question_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_survey_history_survey_id ON survey_history(survey_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_survey_history_actor_user_id ON survey_history(actor_user_id);
+CREATE INDEX IF NOT EXISTS idx_response_history_response_id ON response_history(response_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_response_history_survey_id ON response_history(survey_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_response_history_actor_user_id ON response_history(actor_user_id);
 
 -- Partitioning for large tables (optional, for very large deployments)
 -- Responses table can be partitioned by created_at for better performance with time-series queries
@@ -139,3 +171,5 @@ ANALYZE users;
 ANALYZE surveys;
 ANALYZE responses;
 ANALYZE answers;
+ANALYZE survey_history;
+ANALYZE response_history;

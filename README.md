@@ -1,6 +1,6 @@
-# High-Availability Survey System
+# Survey System
 
-A production-ready, scalable survey platform built with Node.js, Express, PostgreSQL, Redis, RabbitMQ, and React. Designed for high availability, real-time synchronization, and offline-first capabilities.
+A survey platform built with Node.js, Express, PostgreSQL, Redis, and React. It focuses on survey management, public response collection, and simple local development.
 
 ## 📋 Table of Contents
 
@@ -18,16 +18,13 @@ A production-ready, scalable survey platform built with Node.js, Express, Postgr
 
 ### Core Functionality
 - ✅ Create and manage surveys
-- ✅ Real-time response collection
-- ✅ Live data synchronization across clients
-- ✅ WebSocket integration for instant updates
+- ✅ Public response collection
+- ✅ Live admin response monitoring
 - ✅ Auto-save with debouncing and conflict resolution
 
 ### High Availability
 - ✅ Connection pooling for database
 - ✅ Redis caching and session management
-- ✅ RabbitMQ for async messaging
-- ✅ Circuit breaker pattern for resilience
 - ✅ Graceful degradation and error handling
 - ✅ Health checks and monitoring
 
@@ -63,11 +60,10 @@ A production-ready, scalable survey platform built with Node.js, Express, Postgr
 │  │  - Survey Form Component                            │  │
 │  │  - Survey List Component                            │  │
 │  │  - useAutoSave Hook (debounced)                      │  │
-│  │  - useWebSocket Hook (real-time)                     │  │
 │  │  - IndexedDB Storage (offline support)              │  │
 │  └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
-           ▼ HTTP/WebSocket
+           ▼ HTTP
 ┌─────────────────────────────────────────────────────────────┐
 │                   API Gateway Layer                         │
 │  Express Server with Middleware                             │
@@ -76,7 +72,7 @@ A production-ready, scalable survey platform built with Node.js, Express, Postgr
 │  - Error Handling                                           │
 │  - Rate Limiting (ready)                                    │
 └─────────────────────────────────────────────────────────────┘
-      ▼ Routes            ▼ WebSocket
+      ▼ Routes
 ┌─────────────────────────────────────────────────────────────┐
 │                   Business Logic Layer                       │
 │  ┌────────────────┬────────────────┬─────────────────────┐ │
@@ -86,16 +82,14 @@ A production-ready, scalable survey platform built with Node.js, Express, Postgr
 │  │ Services & Modules                                     │ │
 │  │ - Auto-save Service (optimistic locking)             │ │
 │  │ - Redis Manager (caching/sessions)                   │ │
-│  │ - Message Queue (async tasks)                         │ │
-│  │ - Circuit Breaker (resilience)                        │ │
+│  │ - Auto-save cache helpers                            │ │
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
-    ▼              ▼              ▼
-┌─────────────┬─────────────┬──────────────┐
-│ PostgreSQL  │   Redis     │  RabbitMQ    │
-│ (Data)      │ (Cache)     │  (Queue)     │
-│             │ (Sessions)  │  (Events)    │
-└─────────────┴─────────────┴──────────────┘
+    ▼              ▼
+┌─────────────┬─────────────┐
+│ PostgreSQL  │   Redis     │
+│ (Data)      │ (Cache)     │
+└─────────────┴─────────────┘
 ```
 
 ### Data Flow - Auto-Save Example
@@ -112,13 +106,11 @@ Send to API (/responses/:id)
 Server receives with version
     ▼
 Check version for conflicts
-    ├─ No conflict: Update DB, broadcast via WebSocket
+    ├─ No conflict: Update DB and refresh admin view
     ├─ Conflict: Return version, client triggers UI conflict dialog
     └─ Retry with exp backoff if temp error
     ▼
 Update Redis cache
-    ▼
-Publish to RabbitMQ for processing
     ▼
 Response sent to client
     ▼
@@ -152,7 +144,7 @@ cp .env.example .env
 ### 3. Start Development Environment
 
 ```bash
-# Start all services (database, cache, queue)
+# Start all services (database and cache)
 npm run dev
 
 # Or run individually:
@@ -166,7 +158,6 @@ npm run dev:client            # Terminal 2: Start frontend
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3000/api
 - **Health Check**: http://localhost:3000/health
-- **RabbitMQ Management**: http://localhost:15672 (guest/guest)
 
 ## 📁 Project Structure
 
@@ -200,9 +191,7 @@ Survey-System/
 │   │   ├── errorHandler.js     # Global error handler
 │   │   └── requestLogger.js    # HTTP request logging
 │   ├── modules/
-│   │   ├── redis-manager.js    # Redis operations
-│   │   ├── message-queue.js    # RabbitMQ integration
-│   │   └── circuit-breaker.js  # Circuit breaker pattern
+│   │   └── redis-manager.js    # Redis operations
 │   ├── routes/
 │   │   ├── surveys.js          # Survey CRUD
 │   │   ├── responses.js        # Response collection
@@ -222,8 +211,7 @@ Survey-System/
     │   │   ├── SurveyForm.jsx   # Form component
     │   │   └── SurveyList.jsx   # List component
     │   ├── hooks/
-    │   │   ├── useAutoSave.js   # Auto-save hook
-    │   │   └── useWebSocket.js  # WebSocket hook
+    │   │   └── useAutoSave.js   # Auto-save hook
     │   ├── services/
     │   │   ├── api.js           # API client
     │   │   └── storage.js       # IndexedDB wrapper
@@ -275,19 +263,15 @@ docker-compose logs postgres
 docker-compose exec postgres psql -U surveyapp -d survey_db
 ```
 
-### Redis & RabbitMQ
+### Redis
 
 ```bash
 # View Redis
 docker-compose exec redis redis-cli -a redispass
 INFO
 
-# View RabbitMQ
-# Open http://localhost:15672 in browser (guest/guest)
-
 # Check logs
 docker-compose logs redis
-docker-compose logs rabbitmq
 ```
 
 ## 🌍 Deployment
@@ -332,7 +316,6 @@ See [docs/API.md](./docs/API.md) for complete API reference including:
 - Survey endpoints
 - Response endpoints
 - Health checks
-- WebSocket events
 - Error codes
 
 ## 🔐 Security

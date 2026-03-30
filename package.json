@@ -23,6 +23,7 @@
     "lint:client": "cd client && npm run lint",
     "docker:build": "docker build -t survey-system:latest .",
     "docker:push": "docker push survey-system:latest",
+    "backup:db": "bash scripts/backup-postgres.sh",
     "down": "docker-compose down",
     "logs": "docker-compose logs -f"
   },

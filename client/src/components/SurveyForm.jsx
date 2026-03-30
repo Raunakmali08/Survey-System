@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAutoSave } from '../hooks/useAutoSave.js';
 import { createSurvey, getSurvey, updateSurvey } from '../services/api.js';
+import LiveResponsesPanel from './LiveResponsesPanel.jsx';
 
 function createQuestion() {
   return {
@@ -259,12 +260,13 @@ function SurveyForm({ survey, onBack }) {
   };
 
   return (
-    <div className="survey-form">
-      <button className="back-btn" onClick={onBack}>← Back</button>
+    <div className="survey-workspace">
+      <div className="survey-form">
+        <button className="back-btn" onClick={onBack}>← Back</button>
 
-      {isLoadingSurvey && <div className="loading">Loading survey details...</div>}
+        {isLoadingSurvey && <div className="loading">Loading survey details...</div>}
 
-      <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label>Survey Title</label>
           <input
@@ -393,32 +395,40 @@ function SurveyForm({ survey, onBack }) {
           </div>
         )}
 
-        <button type="submit" className="submit-btn">
-          {survey ? 'Update Survey' : 'Create Survey'}
-        </button>
-      </form>
+          <button type="submit" className="submit-btn">
+            {survey ? 'Update Survey' : 'Create Survey'}
+          </button>
+        </form>
 
-      {conflictDialog && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Conflict Detected</h3>
-            <p>This response was modified by another user.</p>
-            <div className="conflicts-list">
-              {conflictDialog.conflicts?.map((conflict, idx) => (
-                <div key={idx} className="conflict-item">
-                  <p>Question: {conflict.questionId}</p>
-                  <p>Your value: {JSON.stringify(conflict.clientValue)}</p>
-                  <p>Server value: {JSON.stringify(conflict.serverValue)}</p>
-                </div>
-              ))}
-            </div>
-            <div className="modal-actions">
-              <button onClick={() => resolveConflict('server')}>Use Server Values</button>
-              <button onClick={() => resolveConflict('client')}>Use Your Values</button>
-              <button onClick={() => setConflictDialog(null)}>Cancel</button>
+        {conflictDialog && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <h3>Conflict Detected</h3>
+              <p>This response was modified by another user.</p>
+              <div className="conflicts-list">
+                {conflictDialog.conflicts?.map((conflict, idx) => (
+                  <div key={idx} className="conflict-item">
+                    <p>Question: {conflict.questionId}</p>
+                    <p>Your value: {JSON.stringify(conflict.clientValue)}</p>
+                    <p>Server value: {JSON.stringify(conflict.serverValue)}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="modal-actions">
+                <button onClick={() => resolveConflict('server')}>Use Server Values</button>
+                <button onClick={() => resolveConflict('client')}>Use Your Values</button>
+                <button onClick={() => setConflictDialog(null)}>Cancel</button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+      </div>
+
+      {survey?.id && (
+        <LiveResponsesPanel
+          surveyId={survey.id}
+          questions={formData.questions}
+        />
       )}
     </div>
   );

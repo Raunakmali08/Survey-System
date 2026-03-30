@@ -32,15 +32,6 @@ const config = {
     cacheTTL: parseInt(process.env.REDIS_CACHE_TTL, 10) || 3600,
   },
   
-  // RabbitMQ
-  rabbitmq: {
-    host: process.env.RABBITMQ_HOST || 'localhost',
-    port: parseInt(process.env.RABBITMQ_PORT, 10) || 5672,
-    user: process.env.RABBITMQ_USER || 'guest',
-    password: process.env.RABBITMQ_PASSWORD || 'guest',
-    vhost: process.env.RABBITMQ_VHOST || '/',
-  },
-  
   // JWT
   jwt: {
     secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
