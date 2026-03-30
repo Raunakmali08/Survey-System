@@ -1,0 +1,45 @@
+{
+  "name": "survey-system-client",
+  "version": "1.0.0",
+  "description": "Survey System Frontend - React Application",
+  "private": true,
+  "proxy": "http://localhost:3000",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "axios": "^1.6.5",
+    "dexie": "^3.2.4",
+    "idb": "^8.0.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.8",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/jest-dom": "^6.1.5",
+    "vitest": "^1.1.0",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

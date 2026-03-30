@@ -1,0 +1,42 @@
+{
+  "name": "survey-system",
+  "version": "1.0.0",
+  "description": "High-Availability Survey System with Real-time Synchronization",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "install-all": "npm install",
+    "dev": "docker-compose up -d && npm run dev:server & npm run dev:client",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "cd server && npm test -- --passWithNoTests",
+    "test:client": "cd client && npm test -- --run",
+    "lint": "npm run lint:server && npm run lint:client",
+    "lint:server": "cd server && npm run lint",
+    "lint:client": "cd client && npm run lint",
+    "docker:build": "docker build -t survey-system:latest .",
+    "docker:push": "docker push survey-system:latest",
+    "down": "docker-compose down",
+    "logs": "docker-compose logs -f"
+  },
+  "keywords": [
+    "survey",
+    "high-availability",
+    "real-time",
+    "react",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
